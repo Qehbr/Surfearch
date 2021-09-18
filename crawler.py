@@ -2,11 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 import json
 
-url = 'https://www.reddit.com/r/learnprogramming/comments/ppu8cc/10_year_uiux_developer_fails_another_code/.json'
-
+url = 'http://www.reddit.com/r/learnprogramming/comments/ppu8cc/10_year_uiux_developer_fails_another_code/'
+start_url='http://www.reddit.com/r/learnprogramming/'
 
 def donwloadRedditToJson(url):
-    response = requests.get(url, headers={'User-agent': 'botick_0.1'})
+    assert url.startswith('http://www.reddit.com/r/learnprogramming/')
+    response = requests.get(url+'.json', headers={'User-agent': 'Search Reddit Bot v0.1'})
     if response.status_code != 200:
         raise Exception("Error status code: {}".format(response.status_code))
     content = BeautifulSoup(response.text, 'lxml').text
@@ -19,5 +20,15 @@ def parseText(redditJson):
     # print(redditJson['title'])
     return redditJson['selftext']
 
-data = donwloadRedditToJson(url)
-print(parseText(data))
+
+def parsePage(url):
+    response = requests.get(url, headers={'User-agent': 'Search Reddit Bot v0.1'})
+    content = BeautifulSoup(response.text, 'lxml')
+
+
+# data = donwloadRedditToJson(url)
+# print(parseText(data))
+
+
+
+
