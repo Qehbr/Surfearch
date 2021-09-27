@@ -2,7 +2,6 @@ import requests
 from datetime import datetime
 import time
 import json
-import sys
 import os.path
 from base64 import b64encode
 import argparse
@@ -77,8 +76,9 @@ class RedditCrawler(object):
                                                      str(b64encode(link.encode("utf-8")).decode("utf-8")))
                 with open(stored_text_file_name, "w", encoding="utf-8") as stored_text_file:
                     stored_text_file.write(data_to_write)
+                print("Crawled: {:.2f}%".format((count / num_of_posts) * 100))
 
-            print("Success crawled: " + str(count))
+        print("Success crawled: " + str(count))
 
 
 def main():
