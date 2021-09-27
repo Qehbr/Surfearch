@@ -3,30 +3,34 @@ from datetime import datetime
 import time
 import json
 import sys
+import os.path
+from base64 import b64encode
 
 
 class RedditCrawler(object):
+    # crawled_data = []
 
-    def __init__(self, subreddit):
+    def __init__(self, subreddit, storage_dir):
         if subreddit == "":
             print("Fill in subreddit")
             sys.exit(0)
-        self.startUrl = "subreddit=" + subreddit
+        self.start_url = "subreddit=" + subreddit
+        self.storage_dir = storage_dir
+        os.mkdir(storage_dir)
 
-    def crawl(self, numberofPosts):
+    def crawl(self, num_of_posts):
         start_time = datetime.utcnow()
         url = "https://api.pushshift.io/reddit/{}/search?limit=1000&sort=desc&{}&before="
         print("Saving submissions")
         count = 0
-        data = []
         previous_epoch = int(start_time.timestamp())
-        for i in range(0, int(numberofPosts/100)):
-            print("CURRENT i is " + str(i) + " CURRENT count is " + str(count))
-            new_url = url.format("submission", self.startUrl) + str(previous_epoch)
+
+        for i in range(0, int(num_of_posts / 100)):
+            new_url = url.format("submission", self.start_url) + str(previous_epoch)
             print("new url is " + new_url)
             json_text = requests.get(new_url, headers={'User-Agent': "Surfearch"})
-            time.sleep(
-                1)  # pushshift has a rate limit, if we send requests too fast it will start returning error messages
+            # pushshift has a rate limit, if we send requests too fast it will start returning error messages
+            time.sleep(1)
             try:
                 json_data = json_text.json()
             except json.decoder.JSONDecodeError:
@@ -37,25 +41,28 @@ class RedditCrawler(object):
             objects = json_data['data']
             if len(objects) == 0:
                 break
-            for object in objects:
-                previous_epoch = object['created_utc'] - 1
+            for data in objects:
+                previous_epoch = data['created_utc'] - 1
                 count += 1
+                title = data['title']
                 try:
-                    description = object['selftext']
+                    description = data['selftext']
                 except Exception:
                     description = ""
-                # print(object)
-                result = {
-                    'title': object['title'],
-                    'description': description.strip().replace('\n', ' ')
-                }
-                data.append(result)
+
+                data_to_write = title + "\n\n\n" + description
+                link = data['full_link']
+                stored_text_file_name = os.path.join(self.storage_dir,
+                                                     str(b64encode(link.encode("utf-8")).decode("utf-8")))
+                print(stored_text_file_name)
+                with open(stored_text_file_name, "w", encoding="utf-8") as stored_text_file:
+                    stored_text_file.write(data_to_write)
+
         print("SUCCESS")
-        return data
 
 
-crawler = RedditCrawler("learnprogramming")
-data = crawler.crawl(700)
-for object in data:
-    print(object)
-print(len(data))
+crawler = RedditCrawler("learnprogramming", "crawled_urls")
+crawler.crawl(100)
+# for obj in crawler.crawled_data:
+#     print(obj)
+# print("Number of crawled data is: " + str(len(crawler.crawled_data)))
