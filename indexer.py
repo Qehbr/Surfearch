@@ -19,7 +19,8 @@ class Indexer(object):
         # check if document was already added
         assert url not in self.url_to_id
         # update url to id
-        self.url_to_id[self.doc_count] = url.decode("utf-8")
+        # self.url_to_id[self.doc_count] = url.decode("utf-8")
+        self.url_to_id[url.decode("utf-8")] = self.doc_count
         current_id = self.doc_count
         # update forward index
         self.forward_index[current_id] = parsed_text
@@ -59,9 +60,34 @@ def create_index_from_dir(crawled_data_dir, index_directory):
     indexer.save_on_disk(index_directory)
 
 
+class Searcher(object):
+    def __init__(self, index_dir):
+        self.inverted_index = dict()
+        self.forward_index = dict()
+        self.url_to_id = dict()
+
+        def load_json_from_file(file_name):
+            file_path = os.path.join(index_dir, file_name)
+            return json.load(open(file_path))
+
+        self.inverted_index = load_json_from_file("inverted_index")
+        self.forward_index = load_json_from_file("forward_index")
+        self.url_to_id = load_json_from_file("url_to_id")
+
+        self.id_to_url = {value: key for (key, value) in self.url_to_id.items()}
+
+    def find_documents(self, words):
+        return sum([self.inverted_index[word] for word in words], [])
+
+    def get_url(self, docid):
+        return self.id_to_url[docid]
+
+
 def main():
     # get arguments
     parser = argparse.ArgumentParser(description="Index /r/{your subreddit}")
+    # parser.add_argument("crawled_data", required=True)
+    # parser.add_argument("index_dir", required=True)
     parser.add_argument("crawled_data")
     parser.add_argument("index_dir")
     args = parser.parse_args()
