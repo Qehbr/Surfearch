@@ -82,6 +82,7 @@ class RedditCrawler(object):
 
 
 def main():
+    # get arguments
     parser = argparse.ArgumentParser(description="Crawl /r/{your subreddit}")
     parser.add_argument("r")
     parser.add_argument("storage_dir")
@@ -91,6 +92,7 @@ def main():
     print("to folder: " + args.storage_dir)
     print("Amount of expected crawled data: " + args.count_of_crawl)
     crawler = RedditCrawler(args.r, args.storage_dir)
+    # crawl
     try:
         crawler.crawl(int(args.count_of_crawl))
     except ValueError:

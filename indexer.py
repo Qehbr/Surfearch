@@ -3,6 +3,7 @@ import os.path
 import json
 from base64 import b64decode
 import re
+from collections import defaultdict
 
 
 class Indexer(object):
@@ -66,21 +67,58 @@ class Searcher(object):
         self.forward_index = dict()
         self.url_to_id = dict()
 
+        # function to load file from json
         def load_json_from_file(file_name):
             file_path = os.path.join(index_dir, file_name)
             return json.load(open(file_path))
 
+        # load indexes from json
         self.inverted_index = load_json_from_file("inverted_index")
         self.forward_index = load_json_from_file("forward_index")
         self.url_to_id = load_json_from_file("url_to_id")
 
+        # swap url and ids
         self.id_to_url = {value: key for (key, value) in self.url_to_id.items()}
 
-    def find_documents(self, words):
-        return sum([self.inverted_index[word] for word in words], [])
+    def generate_snippet(self, query_words, docid):
+        query_words_in_window = []
+        best_window = []
+        best_window_len = 100500
+        # iterate through all words in doc
+        for pos, word in enumerate(self.forward_index[str(docid)]):
+            # if given word in query
+            if word in query_words:
+                # add it to window snippet
+                query_words_in_window.append((word, pos))
+                # if the same word is appeared
+                if len(query_words_in_window) > 1 and query_words_in_window[0][0] == word:
+                    query_words_in_window.pop(0)
+                # update position
+                current_window_len = pos - query_words_in_window[0][1] + 1
+                # if the best window snippet was found
+                if len(set(query_words_in_window)) == len(query_words) and current_window_len < best_window_len:
+                    best_window = query_words_in_window[:]
+                    best_len = current_window_len
+        # return best window snippet containing all words from query
+        return self.forward_index[str(docid)][best_window[0][1]:(best_window[len(best_window) - 1][1]) + 1]
 
+    # find documents by words
+    # def find_documents(self, query_words):
+    #     return sum([self.inverted_index[query_word] for query_word in query_words], [])
+    def find_documents_AND(self, query_words):
+        query_word_count = defaultdict(set)
+        for query_word in query_words:
+            for (pos, docid) in self.inverted_index[query_word]:
+                query_word_count[docid].add(query_word)
+        return [docid for docid, unique_hits in query_word_count.items() if len(unique_hits) == len(query_words)]
+
+    # get url by doc id
     def get_url(self, docid):
         return self.id_to_url[docid]
+
+    # get document text
+    def get_document_text(self, docid):
+        return self.forward_index[str(docid)]
 
 
 def main():
