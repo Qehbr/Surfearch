@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Flask, render_template, redirect, url_for
 from flask_bootstrap import Bootstrap
 from flask_wtf import Form
@@ -27,6 +28,7 @@ def index():
 @app.route("/search_results/<query>", defaults={'page': 1})
 @app.route("/search_results/<query>/<int:page>")
 def search_results(query, page):
+    start_time = datetime.now()
     query_terms = to_query_terms(query)
     page_size = 25
     search_result = searcher.find_documents_OR(query_terms)
@@ -35,9 +37,14 @@ def search_results(query, page):
     urls = [searcher.get_url(docid) for docid in docids]
     texts = [searcher.generate_snippet(query_terms, docid) for docid in docids]
     urls_and_texts = zip(urls, texts)
-    a = search_result.total_pages(page_size)
-    return render_template("search_results.html", offset=((page - 1) * page_size),
-                           total_pages_num=search_result.total_pages(page_size), page=page, query=query,
+    finish_time = datetime.now()
+    return render_template("search_results.html",
+                           processing_time=(finish_time - start_time),
+                           offset=((page - 1) * page_size),
+                           total_doc_num=search_result.total_doc_num(),
+                           total_pages_num=search_result.total_pages(page_size),
+                           page=page,
+                           query=query,
                            urls_and_texts=urls_and_texts)
 
 

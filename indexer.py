@@ -52,6 +52,9 @@ class SearchResults:
     def total_pages(self, page_size):
         return math.floor((len(self.docids) + page_size) / page_size)
 
+    def total_doc_num(self):
+        return len(self.docids)
+
 
 class Searcher(object):
     def __init__(self, index_dir):
@@ -107,7 +110,8 @@ class Searcher(object):
         for query_term in query_terms:
             for (pos, docid) in self.inverted_index[query_term]:
                 query_term_count[docid].add(query_term)
-        return SearchResults([doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)])
+        return SearchResults(
+            [doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)])
 
     def find_documents_OR(self, query_terms):
         docids = set()
