@@ -24,14 +24,21 @@ def index():
     return render_template("index.html", form=search_form)
 
 
-@app.route("/search_results/<query>")
-def search_results(query):
+@app.route("/search_results/<query>", defaults={'page': 1})
+@app.route("/search_results/<query>/<int:page>")
+def search_results(query, page):
     query_terms = to_query_terms(query)
-    docids = searcher.find_documents_OR(query_terms)
+    page_size = 25
+    search_result = searcher.find_documents_OR(query_terms)
+    docids = search_result.get_page(page, page_size)
+
     urls = [searcher.get_url(docid) for docid in docids]
     texts = [searcher.generate_snippet(query_terms, docid) for docid in docids]
     urls_and_texts = zip(urls, texts)
-    return render_template("search_results.html", query=query, urls_and_texts=urls_and_texts)
+    a = search_result.total_pages(page_size)
+    return render_template("search_results.html", offset=((page - 1) * page_size),
+                           total_pages_num=search_result.total_pages(page_size), page=page, query=query,
+                           urls_and_texts=urls_and_texts)
 
 
 if __name__ == "__main__":

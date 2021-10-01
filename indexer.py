@@ -1,4 +1,5 @@
 import argparse
+import math
 import os.path
 import json
 import pickle
@@ -31,7 +32,6 @@ class Indexer(object):
             self.inverted_index[term].append((position, current_id))
 
     def save_on_disk(self, index_dir):
-
         def dump_pickle_to_file(source, file_name):
             file_path = os.path.join(index_dir, file_name)
             pickle.dump(source, open(file_path, "wb"))
@@ -39,6 +39,18 @@ class Indexer(object):
         dump_pickle_to_file(self.inverted_index, "inverted_index")
         dump_pickle_to_file(self.forward_index, "forward_index")
         dump_pickle_to_file(self.url_to_id, "url_to_id")
+
+
+class SearchResults:
+    def __init__(self, docids):
+        self.docids = docids
+
+    def get_page(self, page, page_size):
+        start_num = (page - 1) * page_size
+        return self.docids[start_num:start_num + page_size]
+
+    def total_pages(self, page_size):
+        return math.floor((len(self.docids) + page_size) / page_size)
 
 
 class Searcher(object):
@@ -95,14 +107,14 @@ class Searcher(object):
         for query_term in query_terms:
             for (pos, docid) in self.inverted_index[query_term]:
                 query_term_count[docid].add(query_term)
-        return [docid for docid, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)]
+        return SearchResults([doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)])
 
     def find_documents_OR(self, query_terms):
         docids = set()
         for query_term in query_terms:
             for (pos, docid) in self.inverted_index.get(query_term, []):
                 docids.add(docid)
-        return docids
+        return SearchResults(list(docids))
 
     # get url by doc id
     def get_url(self, docid):
