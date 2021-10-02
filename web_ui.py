@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request, abort
 from flask_bootstrap import Bootstrap
 from flask_wtf import Form
 from wtforms import StringField, SubmitField
@@ -13,8 +13,17 @@ Bootstrap(app)
 searcher = Searcher("indexes", ShelveIndexes)
 
 
+def url_for_other_page(page):
+    args = request.view_args.copy()
+    args['page'] = page
+    return url_for(request.endpoint, **args)
+
+
+app.jinja_env.globals['url_for_other_page'] = url_for_other_page
+
+
 class SearchForm(Form):
-    user_query = StringField('user_query', validators=[DataRequired()])
+    user_query = StringField('Query', validators=[DataRequired()])
     search_button = SubmitField("Search!")
 
 
@@ -32,26 +41,34 @@ def search_results(query, page):
     start_time = datetime.now()
     query_terms = to_query_terms(query)
     page_size = 25
-    search_result = searcher.find_documents_and_rank_by_score_or(query_terms)
+    search_result = searcher.find_documents_and_rank_by_bm25(query_terms)
     docs = search_result.get_page(page, page_size)
+    pagination = search_result.get_pagination(page, page_size)
+    if page > pagination.pages:
+        abort(404)
     texts = []
     urls = []
+    titles = []
     for docid in docs:
+        title = searcher.indexes.get_title(docid)
         text = searcher.indexes.get_document_text(docid)
         url = searcher.indexes.get_url(docid)
+
+        titles.append(title)
         texts.append(generate_snippet(query_terms, text))
         urls.append(url)
 
-    urls_and_texts = zip(urls, texts)
+    titles_texts_and_urls = zip(titles, texts, urls)
+
     finish_time = datetime.now()
+
     return render_template("search_results.html",
                            processing_time=(finish_time - start_time),
                            offset=((page - 1) * page_size),
                            total_doc_num=search_result.total_doc_num(),
-                           total_pages_num=search_result.total_pages(page_size),
-                           page=page,
+                           pagination=pagination,
                            query=query,
-                           urls_and_texts=urls_and_texts)
+                           titles_texts_and_urls=titles_texts_and_urls)
 
 
 if __name__ == "__main__":

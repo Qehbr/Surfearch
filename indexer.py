@@ -1,12 +1,12 @@
 import argparse
 import json
 import os.path
+
 from joblib.numpy_pickle_utils import xrange
 from progressbar import ProgressBar, Percentage, Bar, RotatingMarker
 from lang_proc import to_doc_terms
 import shelve
 from document import Document
-import math
 
 
 class ShelveIndexes(object):
@@ -17,14 +17,14 @@ class ShelveIndexes(object):
         self.doc_count = 0
         self.block_count = 0
         self.index_dir = ""  # TODO
+        self._doc_count = 0
+        self._avgdl = 0
 
-    # TODO 2
-    # def total_doc_count(self):
-    #     return self._doc_count
+    def total_doc_count(self):
+        return self._doc_count
 
-    # TODO 2
-    # def average_doclen(self):
-    #     return self._avgdl
+    def average_doc_len(self):
+        return self._avgdl
 
     def save_on_disk(self):
         self.inverted_index.close()
@@ -37,14 +37,13 @@ class ShelveIndexes(object):
         self.forward_index = shelve.open(os.path.join(index_dir, "forward_index"))
         self.url_to_id = shelve.open(os.path.join(index_dir, "url_to_id"))
 
-        # TODO 2
-        # self._doc_count = 0
-        # total_word_count = 0
-        # for (docid, text) in self.forward_index.items():
-        #     self._doc_count += 1
-        #     total_word_count += len(self.forward_index)
-        # self._avgdl = total_word_count / self._doc_count
-        # print("LOADED!")
+        self._doc_count = 0
+        total_word_count = 0
+        for (docid, text) in self.forward_index.items():
+            self._doc_count += 1
+            total_word_count += len(text.text)
+        self._avgdl = total_word_count / self._doc_count
+        print("LOADED!")
 
     def start_indexing(self, index_dir):
         # TODO self.inverted_index = shelve.open(os.path.join(index_dir, "inverted_index"), "n", writeback=True)
@@ -67,7 +66,7 @@ class ShelveIndexes(object):
         for block in blocks:
             keys |= set(block.keys())
         print("Total word count", len(keys))
-        merged_index = shelve.open(os.path.join(self.index_dir, "inverted_index"), "n")  # TODO 2: no writeback=True
+        merged_index = shelve.open(os.path.join(self.index_dir, "inverted_index"), "n")
         key_ind = 0
         for key in keys:
             key_ind += 1
@@ -94,13 +93,15 @@ class ShelveIndexes(object):
         self.forward_index[str(self.doc_count)] = doc
         # update inverted index
         for position, term in enumerate(doc.text):
+            if term.is_stop_word():
+                continue
             stem = term.stem
             # postings_list = self.inverted_index[stem] if stem in self.inverted_index else []
             # postings_list.append((position, self.doc_count))
             # self.inverted_index[stem] = postings_list
             if stem not in self.inverted_index:
                 self.inverted_index[stem] = []
-            self.inverted_index[stem].append((position, self.doc_count))  # NEW
+            self.inverted_index[stem].append((position, self.doc_count))
 
     def get_documents(self, query_term):
         return self.inverted_index.get(query_term.stem, [])
@@ -115,6 +116,9 @@ class ShelveIndexes(object):
 
     def get_url(self, doc_id):
         return self.forward_index[str(doc_id)].url
+
+    def get_title(self, doc_id):
+        return self.forward_index[str(doc_id)].title
 
 
 def create_index_from_dir(crawled_data_dir, index_directory, IndexesImplementation=ShelveIndexes):

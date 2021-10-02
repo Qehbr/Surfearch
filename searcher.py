@@ -1,5 +1,27 @@
 import math
-from collections import defaultdict
+# from collections import defaultdict
+
+
+class SerpPagination(object):
+    def __init__(self, page, page_size, total_doc_num):
+        self.page = page
+        self.page_size = page_size
+        self.pages = math.ceil(total_doc_num / page_size) + 1
+
+    def iter_pages(self):
+        if self.pages == 1:
+            return [1]
+        if self.page <= 6:
+            left_part = range(1, self.page)
+        else:
+            left_part = [1, None] + list(range(self.page - 4, self.page))
+        right_part = range(self.page, min(self.pages + 1, self.page + 5))
+
+        result = list(left_part) + list(right_part)
+        if result[-1] != self.page:
+            result.append(None)
+
+        return result
 
 
 class SearchResults:
@@ -10,8 +32,10 @@ class SearchResults:
         start_num = (page - 1) * page_size
         return self.docids[start_num:start_num + page_size]
 
-    def total_pages(self, page_size):
-        return math.floor((len(self.docids) + page_size) / page_size)
+    # def total_pages(self, page_size):
+    #     return math.floor((len(self.docids) + page_size) / page_size)
+    def get_pagination(self, page, page_size):
+        return SerpPagination(page, page_size, len(self.docids))
 
     def total_doc_num(self):
         return len(self.docids)
@@ -22,59 +46,72 @@ class Searcher(object):
         self.indexes = IndexesImplementation()
         self.indexes.load_from_disk(index_dir)
 
-    # TODO 2
-    # def _bm25(self, docid, query_terms_to_posting_lists_sizes):
-    #     result = 0
-    #     text = self.indexes.get_document_text(docid)
-    #     text_len = len(text)
-    #     for qt, nd_containing in query_terms_to_posting_lists_sizes.iteritems():
-    #         term_frequency = float(len(filter(lambda t: qt == t, text))) / text_len
-    #         inverted_document_frequency = math.log(
-    #             (self.indexes.total_doc_count() - nd_containing + 0.5) / (nd_containing + 0.5))
-    #         k1 = 1.5
-    #         b = 0.75
-    #         result += inverted_document_frequency * (term_frequency * (k1 + 1)) / (term_frequency + k1 * (
-    #                 1 - b + b * query_terms_to_posting_lists_sizes[qt] / self.indexes.average_doclen()))
-    #
-    #     return result
+    def _bm25(self, docid, query_terms_to_posting_lists_sizes):
+        # initial rank
+        rank = 0
+        # get text by docid
+        text = self.indexes.get_document_text(docid)
+        # get len of all text
+        text_len = len(text)
+        # * qt - query term
+        # * nd_containing - how many docs containing given query term
+        for qt, nd_containing in query_terms_to_posting_lists_sizes.items():
+            # find how many times qt appeared in doc
+            count_of_qt_in_doc = 0
+            for term in text:
+                if term == qt:
+                    count_of_qt_in_doc += 1
+            # compute term frequency in doc
+            term_frequency = count_of_qt_in_doc / text_len
+            # calculate IDF
+            inverted_document_frequency = math.log(
+                (self.indexes.total_doc_count() - nd_containing + 0.5) / (nd_containing + 0.5))
+            # calculate rank with given k1 and b below:
+            k1 = 1.5
+            b = 0.75
+            rank += inverted_document_frequency * (term_frequency * (k1 + 1)) / (term_frequency + k1 * (
+                    1 - b + b * query_terms_to_posting_lists_sizes[qt] / self.indexes.average_doc_len()))
+        return rank
 
-    # TODO 2
-    # def find_documents_and_rank_by_bm25(self, query_terms):
-    #     docids = set()
-    #     query_terms_to_posting_lists_sizes = dict()
-    #     for query_term in query_terms:
-    #         posting_list = self.indexes.get_documents(query_term)
-    #         query_terms_to_posting_lists_sizes[query_term] = len(posting_list)
-    #         for hit in posting_list:
-    #             docids.add(hit.docid)
-    #
-    #     docids_and_relevance = set()
-    #     for docid in docids:
-    #         docids_and_relevance.add((docid, self._bm25(docid, query_terms_to_posting_lists_sizes)))
-    #
-    #     print(docids_and_relevance)
-    #     return SearchResults(sorted(list(docids_and_relevance), key=lambda x: x[1], reverse=True))
-
-    # OLD RANKING FUNCTIONS
-    def rank_docids(self, docids):
-        return sorted([(docid, self.indexes.get_document_score(docid)) for docid in docids], key=lambda x: x[1],
-                      reverse=True)
-
-    # find documents by terms
-    def find_documents_and_rank_by_score_and(self, query_terms):
-        query_term_count = defaultdict(set)
-        for query_term in query_terms:
-            for (pos, docid) in self.indexes.get_documents(query_term):
-                query_term_count[docid].add(query_term)
-        return SearchResults(self.rank_docids(
-            [doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)]))
-
-    def find_documents_and_rank_by_score_or(self, query_terms):
+    def find_documents_and_rank_by_bm25(self, query_terms):
         docids = set()
+        query_terms_to_posting_lists_sizes = dict()
         for query_term in query_terms:
-            for (pos, docid) in self.indexes.get_documents(query_term):
+            # documents containing query term
+            posting_list = self.indexes.get_documents(query_term)
+            # how many documents containing query term
+            query_terms_to_posting_lists_sizes[query_term] = len(posting_list)
+            # add docid to all docids
+            for (pos, docid) in posting_list:
                 docids.add(docid)
-        return SearchResults(self.rank_docids(docids))
+        # create docids and their relevance by bm25 algorithm
+        docids_and_relevance = set()
+        # update each doc
+        for docid in docids:
+            docids_and_relevance.add((docid, self._bm25(docid, query_terms_to_posting_lists_sizes)))
+        # return search results based on their relevance
+        return SearchResults(sorted(list(docids_and_relevance), key=lambda x: x[1], reverse=True))
+
+    # OLD RANKING FUNCTIONS STILL WORKS BUT REDUNANT
+    # def rank_docids(self, docids):
+    #     return sorted([(docid, self.indexes.get_document_score(docid)) for docid in docids], key=lambda x: x[1],
+    #                   reverse=True)
+    #
+    # # find documents by terms
+    # def find_documents_and_rank_by_score_and(self, query_terms):
+    #     query_term_count = defaultdict(set)
+    #     for query_term in query_terms:
+    #         for (pos, docid) in self.indexes.get_documents(query_term):
+    #             query_term_count[docid].add(query_term)
+    #     return SearchResults(self.rank_docids(
+    #         [doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)]))
+    #
+    # def find_documents_and_rank_by_score_or(self, query_terms):
+    #     docids = set()
+    #     for query_term in query_terms:
+    #         for (pos, docid) in self.indexes.get_documents(query_term):
+    #             docids.add(docid)
+    #     return SearchResults(self.rank_docids(docids))
 
 
 def generate_snippet(query_terms, doc_text):
@@ -102,8 +139,12 @@ def generate_snippet(query_terms, doc_text):
                 best_window_len = current_window_len
     # find best window
     doc_len = len(doc_text)
-    snippet_start = max(best_window[0][1] - 15, 0)
-    snippet_end = min(doc_len, best_window[len(best_window) - 1][1] + 1 + 15)
+    snippet_start = max(best_window[0][1] - 10, 0)
+    snippet_end = min(doc_len, best_window[len(best_window) - 1][1] + 1 + 10)
     # return best window snippet containing all terms from query
-    return [(term.full_word, term in query_terms) for term in
-            doc_text[snippet_start:snippet_end]]
+    snippet = [(term.full_word, term in query_terms) for term in doc_text[snippet_start:snippet_end]]
+    if len(snippet) > 50:
+        excessive_len = len(snippet) - 50
+        snippet = snippet[:len(snippet) / 2 - excessive_len / 2] + [("...", False)] + snippet[len(
+            snippet) / 2 + excessive_len / 2:]
+    return snippet

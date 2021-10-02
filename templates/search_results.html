@@ -1,51 +1,39 @@
 {% extends "bootstrap/base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
-{% block title %}This is a search engine{% endblock %}
+{% import "macros.html" as macros %}
+{% block title %}Surfearch - Search results{% endblock %}
 
 {% block content %}
 <div class="container">
     <p>
-    <h1>User requested [{{query | safe}}]</h1>
+    <h1>Search results for [{{query | safe}}]</h1>
     </p>
     <p> {{total_doc_num}} results ({{processing_time.total_seconds()}} seconds)</p>
     <ol start="{{offset+1}}">
-        {% for url_and_text in urls_and_texts %}
-        {% set url = url_and_text[0] %}
-        {% set text = url_and_text[1] %}
+        {% for title_text_and_url in titles_texts_and_urls %}
+        {% set title = title_text_and_url[0] %}
+        {% set text = title_text_and_url[1] %}
+        {% set url = title_text_and_url[2] %}
         <li>
-            <p><a href="{{url}}">{{url}}</a></p>
+            <p><a href="{{url}}">{{title}}</a></p>
             <p>
                 ...
                 {% for word, bold in text %}
                 {% if bold %} <b> {% endif %}
-                    {{ word }}
-                    {% if bold %} </b> {% endif %}
+                {{ word }}
+                {% if bold %} </b> {% endif %}
                 {% endfor %}
                 ...
             </p>
         </li>
         {% else %}
-            <p>
-                No results found
-            </p>
+        <p>
+            No results found
+        </p>
         {% endfor %}
     </ol>
     <nav>
-      <ul class="pagination">
-          {#<li>
-          <a href="#" aria-label="Previous">
-            <span aria-hidden="true">&laquo;</span>
-          </a>
-          </li>#}
-        {% for page_num in range(total_pages_num) %}
-        <li {% if loop.index == page %} class=active {% endif %}><a href="{{url_for("search_results", query=query, page=loop.index)}}">{{loop.index}}</a></li>
-        {% endfor %}
-        {#<li>
-          <a href="#" aria-label="Next">
-            <span aria-hidden="true">&raquo;</span>
-          </a>
-          </li>#}
-      </ul>
+        {{macros.render_pagination(pagination) }}
     </nav>
 </div>
 {% endblock %}
