@@ -4,6 +4,7 @@ Reddit post searcher with given subreddit
 !Heroky deployment is not working!
 
 Usage:
+
 0. Make sure to install nltk libraries! (You will see what you should install when trying to use scripts)
 
 1. Use crawler.py for crawling your subreddit with arguments
