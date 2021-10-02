@@ -8,7 +8,6 @@ import argparse
 
 
 class RedditCrawler(object):
-
     def __init__(self, subreddit, storage_dir):
         # start url is which url we start crawl from
         self.start_url = "subreddit=" + subreddit
@@ -69,7 +68,6 @@ class RedditCrawler(object):
                     text = data['selftext']
                 except Exception:
                     text = ""
-                # data_to_write = title + "\n\n\n" + description
                 link = data['full_link']
                 score = data['score']
                 # write data from post to file with name of 64encoded link
@@ -84,14 +82,16 @@ class RedditCrawler(object):
                     print("Crawled: {:.2f}%".format((count / num_of_posts) * 100))
 
                     print("Success crawled: " + str(count))
+        print("Crawled: 100%")
 
 
 def main():
     # get arguments
     parser = argparse.ArgumentParser(description="Crawl /r/{your subreddit}")
-    parser.add_argument("r")
-    parser.add_argument("storage_dir")
-    parser.add_argument("count_of_crawl")
+    parser.add_argument("--r", dest="r", required=True, help="Subreddit to crawl")
+    parser.add_argument("--storage_dir", dest="storage_dir", required=True, help="Directory to store posts")
+    parser.add_argument("--count_of_crawl", dest="count_of_crawl", required=True,
+                        help="Number of crawled posts")
     args = parser.parse_args()
     print("Crawling subreddit: " + args.r)
     print("to folder: " + args.storage_dir)
@@ -105,6 +105,8 @@ def main():
         exit()
     except SyntaxError as error:
         print(error)
+
+    print("Success! Crawling is ended.")
 
 
 if __name__ == "__main__":

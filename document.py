@@ -1,3 +1,4 @@
+# Document class storing its title, text, url and score on reddit
 class Document(object):
     def __init__(self, title, text, url, score):
         self.title = title

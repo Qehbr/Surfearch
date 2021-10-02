@@ -1,7 +1,7 @@
 {% extends "bootstrap/base.html" %}
 {% import "bootstrap/wtf.html" as wtf %}
 
-{% block title %}Surfearch{% endblock %}
+{% block title %}Surfearch /r/"your subreddit"{% endblock %}
 
 {% block content %}
 <head>
@@ -19,7 +19,8 @@
 }
 
 body{
-	background: url(https://unsplash.com/photos/npxXWgQ33ZQ/download?force=true);
+	background: rgb(249,235,241);
+    background: radial-gradient(circle, rgba(249,235,241,1) 0%, rgba(100,118,139,1) 100%);
 	background-size: cover;
 	background-position: 0px 0px;
 	font-family: Lato;
@@ -29,7 +30,11 @@ h1{
 	font-weight: 700;
 	font=size: 5em;
 }
-
+.middleContent{
+	text-align: center;
+	padding-top: 15%;
+	color:black;
+}
 html{
 	height: 100%;
 }
@@ -46,10 +51,6 @@ hr {
 
 .search {
     margin-top:5px;
-
-
-
-
 
     </style>
 </head>
@@ -72,30 +73,22 @@ hr {
             <!-- Collect the nav links, forms, and other content for toggling -->
             <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                 <ul class="nav navbar-nav">
-                    <li class="active"><a href="/">Home</a></li>
-                    <li><a href="/search">Search</a></li>
-                    <li><a href="/about">About</a></li>
-
+                    <li><a href="/">Home</a></li>
+                    <li ><a href="/search">Search</a></li>
+                    <li class="active"><a href="/about">About</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <div class="row">
-        <div class="col-lg-12">
-            <div id="middleContent">
-                <h1>Surfearch</h1>
-                <h3>Search any subreddit</h3>
-                <hr>
-                <a href="/search">
-                    <button class="btn btn-default btn-lg"><i class="fas fa-search"></i> Search!</button>
-                </a>
-            </div>
-        </div>
-    </div>
 </div>
-<script src="https://code.jquery.com/jquery-3.5.1.js"
-        integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc="
-        crossorigin="anonymous"></script>
-</body>
+<div class="container middleContent">
+    <p>
+    <h1>Surfearch</h1>
+    <h2>Search /r/"your subreddit"</h2>
+    <br><br>
+    <p>If you want more information about scripts, look README.md in <a href="https://github.com/Qehbr/Surfearch">git
+        repository</a></p>
+    </p>
+</div>
 {% endblock %}

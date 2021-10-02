@@ -1,13 +1,16 @@
 import math
+
+# used for old ranking functions based on reddit score
 # from collections import defaultdict
 
-
+# class to store data about pages
 class SerpPagination(object):
     def __init__(self, page, page_size, total_doc_num):
         self.page = page
         self.page_size = page_size
-        self.pages = math.ceil(total_doc_num / page_size) + 1
+        self.pages = math.floor(total_doc_num / page_size) + 1
 
+    # logic for pages visualization
     def iter_pages(self):
         if self.pages == 1:
             return [1]
@@ -16,24 +19,23 @@ class SerpPagination(object):
         else:
             left_part = [1, None] + list(range(self.page - 4, self.page))
         right_part = range(self.page, min(self.pages + 1, self.page + 5))
-
         result = list(left_part) + list(right_part)
         if result[-1] != self.page:
             result.append(None)
-
         return result
 
 
+# class to store search results
 class SearchResults:
+    # store docids and its relevances according to bm25
     def __init__(self, docids):
         self.docids, self.relevances = zip(*docids) if docids else ([], [])
 
+    # paging
     def get_page(self, page, page_size):
         start_num = (page - 1) * page_size
         return self.docids[start_num:start_num + page_size]
 
-    # def total_pages(self, page_size):
-    #     return math.floor((len(self.docids) + page_size) / page_size)
     def get_pagination(self, page, page_size):
         return SerpPagination(page, page_size, len(self.docids))
 
@@ -41,11 +43,13 @@ class SearchResults:
         return len(self.docids)
 
 
+# Searcher
 class Searcher(object):
     def __init__(self, index_dir, IndexesImplementation):
         self.indexes = IndexesImplementation()
         self.indexes.load_from_disk(index_dir)
 
+    # bm 25 ranking for given doc and query terms
     def _bm25(self, docid, query_terms_to_posting_lists_sizes):
         # initial rank
         rank = 0
@@ -73,6 +77,7 @@ class Searcher(object):
                     1 - b + b * query_terms_to_posting_lists_sizes[qt] / self.indexes.average_doc_len()))
         return rank
 
+    # bm25 for all docs
     def find_documents_and_rank_by_bm25(self, query_terms):
         docids = set()
         query_terms_to_posting_lists_sizes = dict()
@@ -92,7 +97,7 @@ class Searcher(object):
         # return search results based on their relevance
         return SearchResults(sorted(list(docids_and_relevance), key=lambda x: x[1], reverse=True))
 
-    # OLD RANKING FUNCTIONS STILL WORKS BUT REDUNANT
+    # OLD RANKING FUNCTIONS STILL WORKS BUT REDUNDANT
     # def rank_docids(self, docids):
     #     return sorted([(docid, self.indexes.get_document_score(docid)) for docid in docids], key=lambda x: x[1],
     #                   reverse=True)
@@ -114,6 +119,7 @@ class Searcher(object):
     #     return SearchResults(self.rank_docids(docids))
 
 
+# generate snippet for given doc and query
 def generate_snippet(query_terms, doc_text):
     query_terms_in_window = []
     best_window = []
@@ -143,8 +149,11 @@ def generate_snippet(query_terms, doc_text):
     snippet_end = min(doc_len, best_window[len(best_window) - 1][1] + 1 + 10)
     # return best window snippet containing all terms from query
     snippet = [(term.full_word, term in query_terms) for term in doc_text[snippet_start:snippet_end]]
+    # if snippet is too long
     if len(snippet) > 50:
+        # get excessive length of snippet
         excessive_len = len(snippet) - 50
-        snippet = snippet[:len(snippet) / 2 - excessive_len / 2] + [("...", False)] + snippet[len(
-            snippet) / 2 + excessive_len / 2:]
+        # cut it
+        snippet = snippet[:int(len(snippet) / 2) - int(excessive_len / 2)] + [("...", False)] + snippet[int(
+            len(snippet) / 2) + int(excessive_len / 2):]
     return snippet
