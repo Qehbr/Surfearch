@@ -66,19 +66,24 @@ class RedditCrawler(object):
                 # get data from post on subreddit
                 title = data['title']
                 try:
-                    description = data['selftext']
+                    text = data['selftext']
                 except Exception:
-                    description = ""
-                data_to_write = title + "\n\n\n" + description
+                    text = ""
+                # data_to_write = title + "\n\n\n" + description
                 link = data['full_link']
+                score = data['score']
                 # write data from post to file with name of 64encoded link
                 stored_text_file_name = os.path.join(self.storage_dir,
                                                      str(b64encode(link.encode("utf-8")).decode("utf-8")))
                 with open(stored_text_file_name, "w", encoding="utf-8") as stored_text_file:
-                    stored_text_file.write(data_to_write)
-                print("Crawled: {:.2f}%".format((count / num_of_posts) * 100))
+                    stored_text_file.write(json.dumps({"url": link,
+                                                       "text": text,
+                                                       "title": title,
+                                                       "score": score}))
+                    stored_text_file.close()
+                    print("Crawled: {:.2f}%".format((count / num_of_posts) * 100))
 
-        print("Success crawled: " + str(count))
+                    print("Success crawled: " + str(count))
 
 
 def main():

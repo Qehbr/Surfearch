@@ -4,12 +4,13 @@ from flask_bootstrap import Bootstrap
 from flask_wtf import Form
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
-from indexer import Searcher
+from indexer import ShelveIndexes
+from searcher import Searcher, generate_snippet
 from lang_proc import to_query_terms
 
 app = Flask(__name__)
 Bootstrap(app)
-searcher = Searcher("indexes")
+searcher = Searcher("indexes", ShelveIndexes)
 
 
 class SearchForm(Form):
@@ -31,11 +32,16 @@ def search_results(query, page):
     start_time = datetime.now()
     query_terms = to_query_terms(query)
     page_size = 25
-    search_result = searcher.find_documents_OR(query_terms)
-    docids = search_result.get_page(page, page_size)
+    search_result = searcher.find_documents_and_rank_by_score_or(query_terms)
+    docs = search_result.get_page(page, page_size)
+    texts = []
+    urls = []
+    for docid in docs:
+        text = searcher.indexes.get_document_text(docid)
+        url = searcher.indexes.get_url(docid)
+        texts.append(generate_snippet(query_terms, text))
+        urls.append(url)
 
-    urls = [searcher.get_url(docid) for docid in docids]
-    texts = [searcher.generate_snippet(query_terms, docid) for docid in docids]
     urls_and_texts = zip(urls, texts)
     finish_time = datetime.now()
     return render_template("search_results.html",

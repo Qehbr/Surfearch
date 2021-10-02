@@ -1,155 +1,161 @@
 import argparse
-import math
-import os.path
 import json
-import pickle
-from base64 import b64decode
-from collections import defaultdict
-
+import os.path
+from joblib.numpy_pickle_utils import xrange
+from progressbar import ProgressBar, Percentage, Bar, RotatingMarker
 from lang_proc import to_doc_terms
+import shelve
+from document import Document
+import math
 
 
-class Indexer(object):
-
+class ShelveIndexes(object):
     def __init__(self):
-        self.inverted_index = defaultdict(list)
-        self.forward_index = dict()
-        self.url_to_id = dict()
+        self.inverted_index = None
+        self.forward_index = None
+        self.url_to_id = None
         self.doc_count = 0
+        self.block_count = 0
+        self.index_dir = ""  # TODO
 
-    def add_document(self, url, parsed_text):
-        # give unique number to file
+    # TODO 2
+    # def total_doc_count(self):
+    #     return self._doc_count
+
+    # TODO 2
+    # def average_doclen(self):
+    #     return self._avgdl
+
+    def save_on_disk(self):
+        self.inverted_index.close()
+        self.forward_index.close()
+        self.url_to_id.close()
+        self._merge_blocks()  # TODO
+
+    def load_from_disk(self, index_dir):
+        self.inverted_index = shelve.open(os.path.join(index_dir, "inverted_index"))
+        self.forward_index = shelve.open(os.path.join(index_dir, "forward_index"))
+        self.url_to_id = shelve.open(os.path.join(index_dir, "url_to_id"))
+
+        # TODO 2
+        # self._doc_count = 0
+        # total_word_count = 0
+        # for (docid, text) in self.forward_index.items():
+        #     self._doc_count += 1
+        #     total_word_count += len(self.forward_index)
+        # self._avgdl = total_word_count / self._doc_count
+        # print("LOADED!")
+
+    def start_indexing(self, index_dir):
+        # TODO self.inverted_index = shelve.open(os.path.join(index_dir, "inverted_index"), "n", writeback=True)
+        self.forward_index = shelve.open(os.path.join(index_dir, "forward_index"), "n", writeback=True)
+        self.url_to_id = shelve.open(os.path.join(index_dir, "url_to_id"), "n", writeback=True)
+        self.index_dir = index_dir  # TODO
+
+    # TODO
+    def sync(self):
+        self.inverted_index.sync()
+        self.forward_index.sync()
+        self.url_to_id.sync()
+
+    # TODO
+    def _merge_blocks(self):
+        print("Merging blocks!")
+        blocks = [shelve.open(os.path.join(self.index_dir, "inverted_index_block{}".format(i))) for i in
+                  xrange(self.block_count)]
+        keys = set()
+        for block in blocks:
+            keys |= set(block.keys())
+        print("Total word count", len(keys))
+        merged_index = shelve.open(os.path.join(self.index_dir, "inverted_index"), "n")  # TODO 2: no writeback=True
+        key_ind = 0
+        for key in keys:
+            key_ind += 1
+            print("MERGING", key_ind, key)
+            merged_index[key] = sum([block.get(key, []) for block in blocks], [])
+        merged_index.close()
+
+    # TODO
+    def _create_new_ii_block(self):
+        print("Created a new block!")
+        if self.inverted_index:
+            self.inverted_index.close()
+        self.inverted_index = shelve.open(
+            os.path.join(self.index_dir, "inverted_index_block{}".format(self.block_count)), "n", writeback=True)
+        self.block_count += 1
+
+    def add_document(self, doc):
+        if self.doc_count % 200 == 0:
+            self._create_new_ii_block()  # TODO
         self.doc_count += 1
-        # check if document was already added
-        assert url not in self.url_to_id
-        # update url to id
-        self.url_to_id[url.decode("utf-8")] = self.doc_count
-        current_id = self.doc_count
+        assert doc.url not in self.url_to_id
+        self.url_to_id[doc.url] = self.doc_count
         # update forward index
-        self.forward_index[current_id] = parsed_text
+        self.forward_index[str(self.doc_count)] = doc
         # update inverted index
-        for position, term in enumerate(parsed_text):
-            self.inverted_index[term].append((position, current_id))
+        for position, term in enumerate(doc.text):
+            stem = term.stem
+            # postings_list = self.inverted_index[stem] if stem in self.inverted_index else []
+            # postings_list.append((position, self.doc_count))
+            # self.inverted_index[stem] = postings_list
+            if stem not in self.inverted_index:
+                self.inverted_index[stem] = []
+            self.inverted_index[stem].append((position, self.doc_count))  # NEW
 
-    def save_on_disk(self, index_dir):
-        def dump_pickle_to_file(source, file_name):
-            file_path = os.path.join(index_dir, file_name)
-            pickle.dump(source, open(file_path, "wb"))
+    def get_documents(self, query_term):
+        return self.inverted_index.get(query_term.stem, [])
 
-        dump_pickle_to_file(self.inverted_index, "inverted_index")
-        dump_pickle_to_file(self.forward_index, "forward_index")
-        dump_pickle_to_file(self.url_to_id, "url_to_id")
+    def get_document_text(self, doc_id):
+        return self.forward_index[str(doc_id)].text
 
+    def get_document_score(self, doc_id):
+        if self.forward_index[str(doc_id)].score > 2:
+            print("HI")
+        return self.forward_index[str(doc_id)].score
 
-class SearchResults:
-    def __init__(self, docids):
-        self.docids = docids
-
-    def get_page(self, page, page_size):
-        start_num = (page - 1) * page_size
-        return self.docids[start_num:start_num + page_size]
-
-    def total_pages(self, page_size):
-        return math.floor((len(self.docids) + page_size) / page_size)
-
-    def total_doc_num(self):
-        return len(self.docids)
+    def get_url(self, doc_id):
+        return self.forward_index[str(doc_id)].url
 
 
-class Searcher(object):
-    def __init__(self, index_dir):
-        self.inverted_index = dict()
-        self.forward_index = dict()
-        self.url_to_id = dict()
-
-        def load_pickle_from_file(file_name):
-            file_path = os.path.join(index_dir, file_name)
-            dst = pickle.load(open(file_path, 'rb'))
-            return dst
-
-        self.inverted_index = load_pickle_from_file("inverted_index")
-        self.forward_index = load_pickle_from_file("forward_index")
-        self.url_to_id = load_pickle_from_file("url_to_id")
-
-        # swap url and ids
-        self.id_to_url = {value: key for (key, value) in self.url_to_id.items()}
-
-    def generate_snippet(self, query_terms, docid):
-        query_terms_in_window = []
-        best_window = []
-        best_window_len = 100500
-        terms_in_best_window = 0
-        # iterate through all terms in doc
-        for pos, term in enumerate(self.forward_index[docid]):
-            # if given term in query
-            if term in query_terms:
-                # add it to window snippet
-                query_terms_in_window.append((term, pos))
-                # if the same term is appeared
-                if len(query_terms_in_window) > 1 and query_terms_in_window[0][0] == term:
-                    query_terms_in_window.pop(0)
-                # update position
-                current_window_len = pos - query_terms_in_window[0][1] + 1
-                terms_in_window = len(set(map(lambda x: x[0], query_terms_in_window)))
-                # if the best window snippet was found
-                if terms_in_window > terms_in_best_window or (
-                        terms_in_window == terms_in_best_window and current_window_len < best_window_len):
-                    terms_in_best_window = terms_in_window
-                    best_window = query_terms_in_window[:]
-                    best_window_len = current_window_len
-        # find best window
-        doc_len = len(self.forward_index[docid])
-        snippet_start = max(best_window[0][1] - 15, 0)
-        snippet_end = min(doc_len, best_window[len(best_window) - 1][1] + 1 + 15)
-        # return best window snippet containing all terms from query
-        return [(term.full_word, term in query_terms) for term in self.forward_index[docid][snippet_start:snippet_end]]
-
-    # find documents by terms
-    def find_documents_AND(self, query_terms):
-        query_term_count = defaultdict(set)
-        for query_term in query_terms:
-            for (pos, docid) in self.inverted_index[query_term]:
-                query_term_count[docid].add(query_term)
-        return SearchResults(
-            [doc_id for doc_id, unique_hits in query_term_count.items() if len(unique_hits) == len(query_terms)])
-
-    def find_documents_OR(self, query_terms):
-        docids = set()
-        for query_term in query_terms:
-            for (pos, docid) in self.inverted_index.get(query_term, []):
-                docids.add(docid)
-        return SearchResults(list(docids))
-
-    # get url by doc id
-    def get_url(self, docid):
-        return self.id_to_url[docid]
-
-    # get document text
-    def get_document_text(self, docid):
-        return self.forward_index[docid]
-
-
-def create_index_from_dir(crawled_data_dir, index_directory):
-    indexer = Indexer()
+def create_index_from_dir(crawled_data_dir, index_directory, IndexesImplementation=ShelveIndexes):
+    indexer = IndexesImplementation()
+    indexer.start_indexing(index_directory)
+    # progress bar
+    filenames = [name for name in os.listdir(crawled_data_dir)]
+    # widgets = [' Indexing: ', Percentage(), ' ', Bar(marker=RotatingMarker())]
+    indexed_docs_num = 0
+    # progressbar = ProgressBar(widgets=widgets, maxval=len(filenames))
+    # progressbar.start()
     # loop through each file in crawled_data
     for filename in os.listdir(crawled_data_dir):
+        indexed_docs_num += 1
+        # progressbar.update(indexed_docs_num)
         # open and read file
-        opened_file = open(os.path.join(crawled_data_dir, filename), encoding="utf8")
-        raw_doc = opened_file.read()
-        opened_file.close()
-        # parse file
-        parsed_doc = to_doc_terms(raw_doc)
-        # add document to indexes
-        indexer.add_document(b64decode(filename), parsed_doc)
-    # save indexes on disk in JSON file
-    indexer.save_on_disk(index_directory)
+        file_to_open = os.path.join(crawled_data_dir, filename)
+        with open(file_to_open, encoding="utf-8") as doc:
+            json_doc = json.load(doc)
+        # get data about document
+        doc_title = json_doc["title"]
+        doc_text = to_doc_terms(json_doc["text"])
+        doc_url = json_doc["url"]
+        doc_score = json_doc["score"]
+        # create new document
+        new_document = Document(doc_title, doc_text, doc_url, int(doc_score))
+        print(indexed_docs_num)
+        if indexed_docs_num % 100 == 0:  # TODO
+            print(indexed_docs_num, "Syncing...")
+            indexer.sync()
+            print(indexed_docs_num, "Synced!")
+        # add it to indexer
+        indexer.add_document(new_document)
+        # progressbar.update(indexed_docs_num)
+        # save indexes on disk in JSON file
+    indexer.save_on_disk()
 
 
 def main():
     # get arguments
     parser = argparse.ArgumentParser(description="Index /r/{your subreddit}")
-    # parser.add_argument("crawled_data", required=True)
-    # parser.add_argument("index_dir", required=True)
     parser.add_argument("crawled_data")
     parser.add_argument("index_dir")
     args = parser.parse_args()
